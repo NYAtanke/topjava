@@ -76,6 +76,96 @@ public class MealsUtil {
         }).collect(toList());
     }
 
+    public static List<MealWithExceed> getFilteredWithExceededInOnePass(List<Meal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
+        Collection<List<Meal>> list = meals.stream()
+                .collect(Collectors.groupingBy(Meal::getDate)).values();
+
+        return list.stream().flatMap(dayMeals -> {
+            boolean exceed = dayMeals.stream().mapToInt(Meal::getCalories).sum() > caloriesPerDay;
+            return dayMeals.stream().filter(meal ->
+                    TimeUtil.isBetween(meal.getTime(), startTime, endTime))
+                    .map(meal -> createWithExceed(meal, exceed));
+        }).collect(toList());
+    }
+
+    public static List<MealWithExceed> getFilteredWithExceededInOnePass2(List<Meal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
+        final class Aggregate {
+            private final List<Meal> dailyMeals = new ArrayList<>();
+            private int dailySumOfCalories;
+
+            private void accumulate(Meal meal) {
+                dailySumOfCalories += meal.getCalories();
+                if (TimeUtil.isBetween(meal.getDateTime().toLocalTime(), startTime, endTime)) {
+                    dailyMeals.add(meal);
+                }
+            }
+
+            // never invoked if the upstream is sequential
+            private Aggregate combine(Aggregate that) {
+                this.dailySumOfCalories += that.dailySumOfCalories;
+                this.dailyMeals.addAll(that.dailyMeals);
+                return this;
+            }
+
+            private Stream<MealWithExceed> finisher() {
+                final boolean exceed = dailySumOfCalories > caloriesPerDay;
+                return dailyMeals.stream().map(meal -> createWithExceed(meal, exceed));
+            }
+        }
+
+        Collection<Stream<MealWithExceed>> values = meals.stream()
+                .collect(Collectors.groupingBy(Meal::getDate,
+                        Collector.of(Aggregate::new, Aggregate::accumulate, Aggregate::combine, Aggregate::finisher))
+                ).values();
+
+        return values.stream().flatMap(identity()).collect(toList());
+    }
+
+    public static List<MealWithExceed> getFilteredWithExceededInOnePass(List<Meal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
+        Collection<List<Meal>> list = meals.stream()
+                .collect(Collectors.groupingBy(Meal::getDate)).values();
+
+        return list.stream().flatMap(dayMeals -> {
+            boolean exceed = dayMeals.stream().mapToInt(Meal::getCalories).sum() > caloriesPerDay;
+            return dayMeals.stream().filter(meal ->
+                    TimeUtil.isBetween(meal.getTime(), startTime, endTime))
+                    .map(meal -> createWithExceed(meal, exceed));
+        }).collect(toList());
+    }
+
+    public static List<MealWithExceed> getFilteredWithExceededInOnePass2(List<Meal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
+        final class Aggregate {
+            private final List<Meal> dailyMeals = new ArrayList<>();
+            private int dailySumOfCalories;
+
+            private void accumulate(Meal meal) {
+                dailySumOfCalories += meal.getCalories();
+                if (TimeUtil.isBetween(meal.getDateTime().toLocalTime(), startTime, endTime)) {
+                    dailyMeals.add(meal);
+                }
+            }
+
+            // never invoked if the upstream is sequential
+            private Aggregate combine(Aggregate that) {
+                this.dailySumOfCalories += that.dailySumOfCalories;
+                this.dailyMeals.addAll(that.dailyMeals);
+                return this;
+            }
+
+            private Stream<MealWithExceed> finisher() {
+                final boolean exceed = dailySumOfCalories > caloriesPerDay;
+                return dailyMeals.stream().map(meal -> createWithExceed(meal, exceed));
+            }
+        }
+
+        Collection<Stream<MealWithExceed>> values = meals.stream()
+                .collect(Collectors.groupingBy(Meal::getDate,
+                        Collector.of(Aggregate::new, Aggregate::accumulate, Aggregate::combine, Aggregate::finisher))
+                ).values();
+
+        return values.stream().flatMap(identity()).collect(toList());
+    }
+
     public static MealWithExceed createWithExceed(Meal meal, boolean exceeded) {
         return new MealWithExceed(meal.getDateTime(), meal.getDescription(), meal.getCalories(), exceeded);
     }
